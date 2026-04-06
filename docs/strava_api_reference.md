@@ -71,7 +71,7 @@ Our strategy:
 - avoid one detail request per activity
 - store sync metadata
 - avoid duplicate fetches
-- surface rate-limit errors clearly so the worker can resume later
+- retry 429 responses with backoff and continue the same page until Strava returns an empty page
 
 ---
 

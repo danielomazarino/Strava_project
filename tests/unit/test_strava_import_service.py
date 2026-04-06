@@ -6,7 +6,6 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import httpx
-from fastapi import HTTPException
 
 from app.core.config import Settings
 from app.core.security import encrypt_secret
@@ -17,6 +16,11 @@ from app.services.strava_import_service import StravaImportService
 class FakeResponse:
     payload: object
     status_code: int = 200
+    headers: dict[str, str] | None = None
+
+    def __post_init__(self) -> None:
+        if self.headers is None:
+            self.headers = {}
 
     def raise_for_status(self) -> None:
         if self.status_code >= 400:
@@ -117,9 +121,30 @@ def test_import_activities_pages_through_summaries():
     assert activity_repository.calls[1]["polyline"] == "polyline-2"
 
 
-def test_import_activities_translates_strava_rate_limit_to_http_429():
+def test_import_activities_retries_rate_limit_and_keeps_paginating():
     settings = Settings(secret_key="unit-test-secret")
-    http_client = FakeHttpClient([FakeResponse([], status_code=429)])
+    sleep_calls: list[int] = []
+
+    def sleep_fn(seconds: int) -> None:
+        sleep_calls.append(seconds)
+
+    http_client = FakeHttpClient(
+        [
+            FakeResponse([], status_code=429, headers={"Retry-After": "1"}),
+            FakeResponse(
+                [
+                    {
+                        "id": 333,
+                        "name": "Recovered Run",
+                        "type": "Run",
+                        "start_date": "2026-04-07T08:00:00Z",
+                        "distance": 8000,
+                    }
+                ]
+            ),
+            FakeResponse([]),
+        ]
+    )
     user_repository = FakeUserRepository("unit-test-secret")
     activity_repository = FakeActivityRepository()
     service = StravaImportService(
@@ -127,12 +152,14 @@ def test_import_activities_translates_strava_rate_limit_to_http_429():
         user_repository=user_repository,
         activity_repository=activity_repository,
         http_client=http_client,
+        sleep_fn=sleep_fn,
     )
 
-    try:
-        service.import_activities(strava_athlete_id=123)
-    except HTTPException as exc:
-        assert exc.status_code == 429
-        assert exc.detail == "Strava rate limit exceeded"
-    else:
-        raise AssertionError("Expected HTTPException")
+    imported_count = service.import_activities(strava_athlete_id=123)
+
+    assert imported_count == 1
+    assert sleep_calls == [1]
+    assert http_client.requests[0][2] == {"page": 1, "per_page": 200}
+    assert http_client.requests[1][2] == {"page": 1, "per_page": 200}
+    assert http_client.requests[2][2] == {"page": 2, "per_page": 200}
+    assert activity_repository.calls[0]["strava_activity_id"] == 333

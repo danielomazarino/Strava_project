@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any
+from time import sleep
+from typing import Callable, Any
 
 import httpx
 from fastapi import HTTPException
@@ -21,12 +22,14 @@ class StravaImportService:
         activity_repository: ActivityRepository,
         http_client: httpx.Client,
         activity_list_url: str = "https://www.strava.com/api/v3/athlete/activities",
+        sleep_fn: Callable[[int], None] = sleep,
     ):
         self.settings = settings
         self.user_repository = user_repository
         self.activity_repository = activity_repository
         self.http_client = http_client
         self.activity_list_url = activity_list_url
+        self.sleep_fn = sleep_fn
 
     def import_activities(
         self,
@@ -93,15 +96,20 @@ class StravaImportService:
         if before is not None:
             params["before"] = before
 
-        response = self.http_client.get(
-            self.activity_list_url,
-            headers={"Authorization": f"Bearer {access_token}"},
-            params=params,
-        )
-        try:
-            response.raise_for_status()
-        except httpx.HTTPStatusError as exc:
-            raise self._to_http_exception(exc) from exc
+        while True:
+            response = self.http_client.get(
+                self.activity_list_url,
+                headers={"Authorization": f"Bearer {access_token}"},
+                params=params,
+            )
+            if response.status_code == 429:
+                self.sleep_fn(self._retry_after_seconds(response))
+                continue
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                raise self._to_http_exception(exc) from exc
+            break
         payload = response.json()
         if not isinstance(payload, list):
             raise ValueError("Invalid Strava activity list response")
@@ -126,8 +134,16 @@ class StravaImportService:
     @staticmethod
     def _to_http_exception(exc: httpx.HTTPStatusError) -> HTTPException:
         status_code = exc.response.status_code
-        if status_code == 429:
-            return HTTPException(status_code=429, detail="Strava rate limit exceeded")
         if status_code >= 500:
             return HTTPException(status_code=502, detail="Strava API unavailable")
         return HTTPException(status_code=status_code, detail="Strava API error")
+
+    @staticmethod
+    def _retry_after_seconds(response: httpx.Response) -> int:
+        retry_after = response.headers.get("Retry-After")
+        if retry_after is None:
+            return 60
+        try:
+            return max(int(retry_after), 1)
+        except ValueError:
+            return 60

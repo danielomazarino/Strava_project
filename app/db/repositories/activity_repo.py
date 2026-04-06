@@ -82,6 +82,7 @@ class ActivityRepository:
             activity.raw_payload = raw_payload
 
         self.session.flush()
+        self.session.commit()
         return activity
 
     def list_by_user_id(self, *, user_id) -> list[Activity]:

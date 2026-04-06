@@ -11,7 +11,7 @@ from app.main import app
 
 
 class FakeDiaryService:
-    def list_entries(self, *, user_id):
+    def list_entries(self, *, strava_athlete_id):
         return [
             SimpleNamespace(
                 id=uuid4(),

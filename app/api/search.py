@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.db.repositories.activity_repo import ActivityRepository
+from app.db.repositories.user_repo import UserRepository
 from app.db.session import get_db
 from app.services.search_service import SearchService
 
@@ -14,10 +15,15 @@ def get_activity_repository(db: Session = Depends(get_db)) -> ActivityRepository
     return ActivityRepository(db)
 
 
+def get_user_repository(db: Session = Depends(get_db)) -> UserRepository:
+    return UserRepository(db)
+
+
 def get_search_service(
+    user_repository: UserRepository = Depends(get_user_repository),
     activity_repository: ActivityRepository = Depends(get_activity_repository),
 ) -> SearchService:
-    return SearchService(activity_repository=activity_repository)
+    return SearchService(user_repository=user_repository, activity_repository=activity_repository)
 
 
 @router.get("/keyword")
@@ -26,7 +32,7 @@ def keyword_search(
     q: str,
     search_service: SearchService = Depends(get_search_service),
 ) -> dict[str, object]:
-    results = search_service.keyword_search(user_id=strava_athlete_id, query=q)
+    results = search_service.keyword_search(strava_athlete_id=strava_athlete_id, query=q)
     return {"status": "ok", "results": [result.model_dump() for result in results]}
 
 
@@ -36,5 +42,5 @@ def semantic_search(
     q: str,
     search_service: SearchService = Depends(get_search_service),
 ) -> dict[str, object]:
-    results = search_service.semantic_search(user_id=strava_athlete_id, query=q)
+    results = search_service.semantic_search(strava_athlete_id=strava_athlete_id, query=q)
     return {"status": "ok", "results": [result.model_dump() for result in results]}

@@ -50,4 +50,5 @@ class UserRepository:
             user.token_encryption_version = TOKEN_ENCRYPTION_VERSION
 
         self.session.flush()
+        self.session.commit()
         return user

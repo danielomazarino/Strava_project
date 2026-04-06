@@ -45,19 +45,32 @@ class FakeActivityRepository:
         return [self.list_by_user_id(user_id=user_id)[0]] if query.lower() == "hills" else []
 
 
-def test_keyword_search_uses_repository_filtering():
-    service = SearchService(activity_repository=FakeActivityRepository())
+@dataclass
+class FakeUser:
+    id: object
+    strava_athlete_id: int
 
-    results = service.keyword_search(user_id=123, query="hills")
+
+class FakeUserRepository:
+    def get_by_strava_athlete_id(self, strava_athlete_id: int):
+        if strava_athlete_id == 123:
+            return FakeUser(id=uuid4(), strava_athlete_id=strava_athlete_id)
+        return None
+
+
+def test_keyword_search_uses_repository_filtering():
+    service = SearchService(user_repository=FakeUserRepository(), activity_repository=FakeActivityRepository())
+
+    results = service.keyword_search(strava_athlete_id=123, query="hills")
 
     assert len(results) == 1
     assert results[0].strava_activity_id == 1
 
 
 def test_semantic_search_scores_relevant_activity_first():
-    service = SearchService(activity_repository=FakeActivityRepository())
+    service = SearchService(user_repository=FakeUserRepository(), activity_repository=FakeActivityRepository())
 
-    results = service.semantic_search(user_id=123, query="run hills")
+    results = service.semantic_search(strava_athlete_id=123, query="run hills")
 
     assert [result.strava_activity_id for result in results] == [1]
     assert results[0].score == 1.0

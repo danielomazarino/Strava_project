@@ -11,7 +11,7 @@ from app.main import app
 
 
 class FakeSearchService:
-    def keyword_search(self, *, user_id, query: str):
+    def keyword_search(self, *, strava_athlete_id, query: str):
         return [
             SimpleNamespace(
                 id=uuid4(),
@@ -31,7 +31,7 @@ class FakeSearchService:
             )
         ]
 
-    def semantic_search(self, *, user_id, query: str):
+    def semantic_search(self, *, strava_athlete_id, query: str):
         return [
             SimpleNamespace(
                 id=uuid4(),

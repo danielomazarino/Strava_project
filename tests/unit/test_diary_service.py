@@ -45,10 +45,23 @@ class FakeActivityRepository:
         ]
 
 
-def test_diary_service_returns_entries_in_order():
-    service = DiaryService(activity_repository=FakeActivityRepository())
+@dataclass
+class FakeUser:
+    id: object
+    strava_athlete_id: int
 
-    entries = service.list_entries(user_id=123)
+
+class FakeUserRepository:
+    def get_by_strava_athlete_id(self, strava_athlete_id: int):
+        if strava_athlete_id == 123:
+            return FakeUser(id=uuid4(), strava_athlete_id=strava_athlete_id)
+        return None
+
+
+def test_diary_service_returns_entries_in_order():
+    service = DiaryService(user_repository=FakeUserRepository(), activity_repository=FakeActivityRepository())
+
+    entries = service.list_entries(strava_athlete_id=123)
 
     assert [entry.strava_activity_id for entry in entries] == [222, 111]
     assert entries[0].name == "Second"

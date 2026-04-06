@@ -21,14 +21,12 @@ class StravaImportService:
         activity_repository: ActivityRepository,
         http_client: httpx.Client,
         activity_list_url: str = "https://www.strava.com/api/v3/athlete/activities",
-        activity_detail_url: str = "https://www.strava.com/api/v3/activities",
     ):
         self.settings = settings
         self.user_repository = user_repository
         self.activity_repository = activity_repository
         self.http_client = http_client
         self.activity_list_url = activity_list_url
-        self.activity_detail_url = activity_detail_url
 
     def import_activities(
         self,
@@ -58,25 +56,21 @@ class StravaImportService:
                 break
 
             for summary_activity in activities:
-                activity_detail = self._fetch_activity_detail(
-                    access_token=access_token,
-                    activity_id=int(summary_activity["id"]),
-                )
                 self.activity_repository.upsert_activity(
                     user_id=user.id,
-                    strava_activity_id=int(activity_detail["id"]),
-                    name=activity_detail.get("name"),
-                    type=activity_detail.get("type"),
-                    start_date=self._parse_datetime(activity_detail["start_date"]),
-                    distance=activity_detail.get("distance"),
-                    moving_time=activity_detail.get("moving_time"),
-                    elapsed_time=activity_detail.get("elapsed_time"),
-                    elevation_gain=activity_detail.get("total_elevation_gain"),
-                    description=activity_detail.get("description"),
-                    polyline=self._extract_polyline(activity_detail),
-                    timezone=activity_detail.get("timezone"),
-                    location_country=activity_detail.get("location_country"),
-                    raw_payload=activity_detail,
+                    strava_activity_id=int(summary_activity["id"]),
+                    name=summary_activity.get("name"),
+                    type=summary_activity.get("type"),
+                    start_date=self._parse_datetime(summary_activity["start_date"]),
+                    distance=summary_activity.get("distance"),
+                    moving_time=summary_activity.get("moving_time"),
+                    elapsed_time=summary_activity.get("elapsed_time"),
+                    elevation_gain=summary_activity.get("total_elevation_gain"),
+                    description=summary_activity.get("description"),
+                    polyline=self._extract_polyline(summary_activity),
+                    timezone=summary_activity.get("timezone"),
+                    location_country=summary_activity.get("location_country"),
+                    raw_payload=summary_activity,
                 )
                 total_imported += 1
 
@@ -104,21 +98,13 @@ class StravaImportService:
             headers={"Authorization": f"Bearer {access_token}"},
             params=params,
         )
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise self._to_http_exception(exc) from exc
         payload = response.json()
         if not isinstance(payload, list):
             raise ValueError("Invalid Strava activity list response")
-        return payload
-
-    def _fetch_activity_detail(self, *, access_token: str, activity_id: int) -> dict[str, Any]:
-        response = self.http_client.get(
-            f"{self.activity_detail_url}/{activity_id}",
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
-        response.raise_for_status()
-        payload = response.json()
-        if not isinstance(payload, dict):
-            raise ValueError("Invalid Strava activity detail response")
         return payload
 
     @staticmethod
@@ -136,3 +122,12 @@ class StravaImportService:
             if polyline is not None:
                 return str(polyline)
         return payload.get("polyline")
+
+    @staticmethod
+    def _to_http_exception(exc: httpx.HTTPStatusError) -> HTTPException:
+        status_code = exc.response.status_code
+        if status_code == 429:
+            return HTTPException(status_code=429, detail="Strava rate limit exceeded")
+        if status_code >= 500:
+            return HTTPException(status_code=502, detail="Strava API unavailable")
+        return HTTPException(status_code=status_code, detail="Strava API error")

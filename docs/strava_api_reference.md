@@ -53,6 +53,10 @@ Used for:
 - polyline
 - stats
 
+Current project usage:
+- not used by the historical import path
+- reserved for future enrichment flows if we need fields that are not present in the list payload
+
 ---
 
 # 3. Rate Limits
@@ -63,8 +67,11 @@ Strava rate limits:
 
 Our strategy:
 - batch requests
+- use the paginated athlete-activities list payload for historical import and sync
+- avoid one detail request per activity
 - store sync metadata
 - avoid duplicate fetches
+- surface rate-limit errors clearly so the worker can resume later
 
 ---
 

@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -11,11 +13,18 @@ from app.api.search import router as search_router
 from app.core.config import get_cors_origins, get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
+from app.db.bootstrap import initialize_database
 
 settings = get_settings()
 configure_logging(settings.log_level)
 
-app = FastAPI(title="Strava Training Diary")
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+	initialize_database(settings.database_url)
+	yield
+
+
+app = FastAPI(title="Strava Training Diary", lifespan=lifespan)
 
 register_exception_handlers(app)
 

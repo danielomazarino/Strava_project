@@ -38,6 +38,7 @@ Ensure the following are set in Railway:
 - LOG_LEVEL
 
 Railway must use PostgreSQL for `DATABASE_URL`. SQLite is allowed only for local development and tests.
+The app now bootstraps the current tables on startup, so a fresh Railway PostgreSQL database should not need a manual schema setup step.
 
 Deployment entrypoint:
 - `Dockerfile` should launch `uvicorn app.main:app` on Railway.

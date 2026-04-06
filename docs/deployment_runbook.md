@@ -7,6 +7,7 @@ This runbook turns the deployment checklist into the exact sequence to follow on
 - Confirm the local test suite passes.
 - Confirm `APP_ENV=production` is set in Railway.
 - Confirm `DATABASE_URL` points to Railway PostgreSQL.
+- If this is a fresh Railway PostgreSQL database, the app will create the current tables on startup.
 - Confirm `CORS_ORIGINS` contains only approved frontend origins.
 - Confirm `SECRET_KEY`, `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`, and `LLM_MODEL_PATH` are present.
 

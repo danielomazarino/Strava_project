@@ -3,6 +3,6 @@ builder = "RAILPACK"
 buildCommand = "npm --prefix frontend ci && npm --prefix frontend run build"
 
 [deploy]
-startCommand = "npm --prefix frontend run start"
+startCommand = "node frontend/build"
 healthcheckPath = "/"
 restartPolicyType = "ON_FAILURE"

@@ -1,8 +1,6 @@
 [build]
-builder = "RAILPACK"
-buildCommand = "npm ci && npm run build"
+builder = "DOCKERFILE"
 
 [deploy]
-startCommand = "node build"
 healthcheckPath = "/"
 restartPolicyType = "ON_FAILURE"

@@ -2,5 +2,5 @@
 builder = "DOCKERFILE"
 
 [deploy]
-healthcheckPath = "/"
+healthcheckPath = "/dashboard"
 restartPolicyType = "ON_FAILURE"

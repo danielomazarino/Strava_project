@@ -26,6 +26,9 @@ class DiaryService:
                 type=activity.type,
                 start_date=activity.start_date,
                 distance=float(activity.distance) if activity.distance is not None else None,
+                    moving_time=getattr(activity, "moving_time", None),
+                    elapsed_time=getattr(activity, "elapsed_time", None),
+                    elevation_gain=float(getattr(activity, "elevation_gain", None)) if getattr(activity, "elevation_gain", None) is not None else None,
                 description=activity.description,
                 location_country=activity.location_country,
             )

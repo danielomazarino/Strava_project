@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from datetime import timedelta
 from typing import Any
 from urllib.parse import urlencode
 
@@ -99,6 +100,18 @@ class OAuthService:
     ):
         if not verify_oauth_state(state, self.settings.secret_key):
             raise HTTPException(status_code=400, detail="Invalid OAuth state")
+
+        if code.startswith("mock-") and self.settings.enable_dev_mock_auth:
+            strava_athlete_id_raw = code.removeprefix("mock-")
+            strava_athlete_id = int(strava_athlete_id_raw)
+            expires_at = datetime.now(timezone.utc) + timedelta(days=90)
+            return self.user_repository.upsert_tokens(
+                strava_athlete_id=strava_athlete_id,
+                access_token=f"mock-access-token-{strava_athlete_id}",
+                refresh_token=f"mock-refresh-token-{strava_athlete_id}",
+                token_expires_at=expires_at,
+                secret_key=self.settings.secret_key,
+            )
 
         token_set = self.exchange_code_for_tokens(code=code, redirect_uri=redirect_uri)
         return self.user_repository.upsert_tokens(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -8,6 +9,9 @@ from typing import Any
 from app.db.repositories.activity_repo import ActivityRepository
 from app.db.repositories.user_repo import UserRepository
 from app.schemas.heatmap import ActivityGeoData, GeoBounds, GeoPoint, HeatmapTile, HeatmapTilePoint
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -34,7 +38,14 @@ class HeatmapService:
         return points
 
     def extract_geo_data(self, activity: Any) -> ActivityGeoData:
-        points = self.decode_polyline(activity.polyline or "")
+        try:
+            points = self.decode_polyline(activity.polyline or "")
+        except ValueError:
+            logger.warning(
+                "invalid_activity_polyline",
+                extra={"action": "invalid_activity_polyline", "outcome": "skipped", "activity_id": getattr(activity, "id", None)},
+            )
+            points = []
         return ActivityGeoData(
             activity_id=activity.id,
             strava_activity_id=activity.strava_activity_id,
@@ -108,10 +119,13 @@ class HeatmapService:
     ) -> list[Any]:
         activities = self.activity_repository.list_by_user_id(user_id=user_id)
         filtered: list[Any] = []
+        normalized_start_date = self._normalize_datetime(start_date) if start_date is not None else None
+        normalized_end_date = self._normalize_datetime(end_date) if end_date is not None else None
         for activity in activities:
-            if start_date is not None and activity.start_date < start_date:
+            activity_start_date = self._normalize_datetime(activity.start_date)
+            if normalized_start_date is not None and activity_start_date < normalized_start_date:
                 continue
-            if end_date is not None and activity.start_date > end_date:
+            if normalized_end_date is not None and activity_start_date > normalized_end_date:
                 continue
             if activity_type is not None and (activity.type or "").lower() != activity_type.lower():
                 continue
@@ -119,6 +133,12 @@ class HeatmapService:
                 continue
             filtered.append(activity)
         return filtered
+
+    @staticmethod
+    def _normalize_datetime(value: datetime) -> datetime:
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
 
     @staticmethod
     def _decode_value(encoded: str, index: int) -> tuple[int, int]:

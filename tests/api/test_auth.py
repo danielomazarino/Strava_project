@@ -3,11 +3,14 @@ from __future__ import annotations
 from types import SimpleNamespace
 from uuid import uuid4
 
+import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from app.api.auth import get_oauth_service
+from app.api.auth import get_oauth_service, mock_login
 from app.core.config import Settings, get_settings
 from app.core.security import create_oauth_state
+from app.db.bootstrap import DEV_DEMO_STRAVA_ATHLETE_ID
 from app.main import app
 
 
@@ -32,6 +35,63 @@ def test_login_redirects_to_strava_authorize_url(monkeypatch):
     assert "response_type=code" in response.headers["location"]
 
 
+def test_login_falls_back_to_mock_auth_without_client_id(monkeypatch):
+    get_settings.cache_clear()
+    monkeypatch.delenv("STRAVA_CLIENT_ID", raising=False)
+    monkeypatch.delenv("STRAVA_CLIENT_SECRET", raising=False)
+    monkeypatch.setenv("SECRET_KEY", "unit-test-secret")
+    monkeypatch.setenv("APP_ENV", "development")
+
+    client = TestClient(app)
+
+    response = client.get(
+        "/auth/login",
+        headers={"referer": "http://127.0.0.1:5173/auth/login"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert response.headers["location"].startswith("http://testserver/auth/mock-login?")
+    assert "return_to=http%3A%2F%2F127.0.0.1%3A5173%2Fauth%2Fcallback" in response.headers["location"]
+
+
+def test_mock_login_uses_demo_athlete_id(monkeypatch):
+    get_settings.cache_clear()
+    monkeypatch.delenv("STRAVA_CLIENT_ID", raising=False)
+    monkeypatch.delenv("STRAVA_CLIENT_SECRET", raising=False)
+    monkeypatch.setenv("SECRET_KEY", "unit-test-secret")
+    monkeypatch.setenv("APP_ENV", "development")
+
+    client = TestClient(app)
+
+    response = client.get(
+        "/auth/mock-login?return_to=http%3A%2F%2F127.0.0.1%3A5173%2Fauth%2Fcallback",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert f"code=mock-{DEV_DEMO_STRAVA_ATHLETE_ID}" in response.headers["location"]
+
+
+def test_mock_login_is_disabled_in_production():
+    settings = Settings(
+        strava_client_id="client-id",
+        strava_client_secret="secret",
+        database_url="postgresql://example",
+        secret_key="unit-test-secret",
+        llm_model_path="/models/gemma",
+        cors_origins="https://example.com",
+        log_level="INFO",
+        environment="production",
+        enable_dev_mock_auth=True,
+    )
+
+    with pytest.raises(HTTPException) as excinfo:
+        mock_login(return_to="http://127.0.0.1:5173/auth/callback", settings=settings)
+
+    assert excinfo.value.status_code == 404
+
+
 def test_callback_returns_connected_payload():
     app.dependency_overrides[get_oauth_service] = lambda: FakeOAuthService()
     client = TestClient(app)
@@ -44,6 +104,25 @@ def test_callback_returns_connected_payload():
     assert response.status_code == 200
     assert response.json()["status"] == "connected"
     assert response.json()["strava_athlete_id"] == 123456
+
+
+def test_callback_redirects_browser_navigation_to_frontend():
+    app.dependency_overrides[get_oauth_service] = lambda: FakeOAuthService()
+    client = TestClient(app)
+    state = create_oauth_state("unit-test-secret", return_to="http://127.0.0.1:5173/auth/callback")
+
+    response = client.get(
+        f"/auth/callback?code=oauth-code&state={state}",
+        headers={"accept": "text/html"},
+        follow_redirects=False,
+    )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 302
+    assert response.headers["location"].startswith("http://127.0.0.1:5173/auth/callback?")
+    assert "user_id=" in response.headers["location"]
+    assert "strava_athlete_id=123456" in response.headers["location"]
 
 
 def test_callback_rejects_missing_parameters():

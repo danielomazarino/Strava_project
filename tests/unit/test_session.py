@@ -21,3 +21,13 @@ def test_get_session_factory_returns_sessionmaker(monkeypatch, tmp_path):
 
     assert session_factory.kw["autocommit"] is False
     assert session_factory.kw["autoflush"] is False
+
+
+def test_get_engine_defaults_to_dev_sqlite(monkeypatch):
+    get_settings.cache_clear()
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("APP_ENV", "development")
+
+    engine = get_engine()
+
+    assert str(engine.url).startswith("sqlite:///")

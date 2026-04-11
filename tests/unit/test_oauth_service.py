@@ -97,6 +97,17 @@ def test_complete_callback_persists_encrypted_tokens():
     assert repository.calls[0]["secret_key"] == "unit-test-secret"
 
 
+def test_create_oauth_state_round_trips_return_to():
+    from app.core.security import unpack_oauth_state
+
+    state = create_oauth_state(
+        "unit-test-secret",
+        return_to="http://127.0.0.1:5173/auth/callback",
+    )
+
+    assert unpack_oauth_state(state, "unit-test-secret") == "http://127.0.0.1:5173/auth/callback"
+
+
 def test_refresh_tokens_uses_refresh_grant():
     settings = Settings(
         strava_client_id="client-123",

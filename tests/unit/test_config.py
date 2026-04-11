@@ -28,6 +28,18 @@ def test_get_settings_reads_environment(monkeypatch):
     assert settings.environment == "test"
 
 
+def test_get_settings_uses_dev_fallbacks(monkeypatch):
+    monkeypatch.delenv("STRAVA_CLIENT_ID", raising=False)
+    monkeypatch.delenv("STRAVA_CLIENT_SECRET", raising=False)
+    monkeypatch.delenv("SECRET_KEY", raising=False)
+    monkeypatch.setenv("APP_ENV", "development")
+
+    settings = get_settings()
+
+    assert settings.secret_key == "strava-training-diary-dev-secret"
+    assert settings.enable_dev_mock_auth is True
+
+
 def test_get_settings_rejects_sqlite_in_production(monkeypatch):
     get_settings.cache_clear()
     monkeypatch.setenv("APP_ENV", "production")
@@ -49,3 +61,30 @@ def test_get_settings_rejects_missing_production_values(monkeypatch):
 
     with pytest.raises(ValueError, match="Missing required production settings"):
         get_settings()
+
+
+def test_get_settings_rejects_dev_mock_auth_in_production(monkeypatch):
+    get_settings.cache_clear()
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://example")
+    monkeypatch.setenv("STRAVA_CLIENT_ID", "client-id")
+    monkeypatch.setenv("STRAVA_CLIENT_SECRET", "client-secret")
+    monkeypatch.setenv("SECRET_KEY", "secret-key")
+    monkeypatch.setenv("LLM_MODEL_PATH", "/models/gemma")
+    monkeypatch.setenv("CORS_ORIGINS", "https://example.com")
+    monkeypatch.setenv("ENABLE_DEV_MOCK_AUTH", "true")
+
+    with pytest.raises(ValueError, match="ENABLE_DEV_MOCK_AUTH must remain false in production"):
+        get_settings()
+
+
+def test_app_env_development_overrides_railway_production(monkeypatch):
+    get_settings.cache_clear()
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+
+    settings = get_settings()
+
+    assert settings.environment == "development"
+    assert settings.database_url.startswith("sqlite:///")
+    assert settings.enable_dev_mock_auth is True

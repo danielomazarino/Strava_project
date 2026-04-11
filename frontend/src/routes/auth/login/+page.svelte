@@ -62,7 +62,7 @@
 						<li>Demo session is only available in local development.</li>
 					{/if}
 					<li>Skip for now keeps the shell open if you only want to inspect layout.</li>
-					<li>Set PUBLIC_API_BASE_URL before sharing the app so the live backend auth flow is used.</li>
+					<li>Set PUBLIC_API_BASE_URL to /api and BACKEND_API_BASE_URL on the server before sharing the app.</li>
 				</ul>
 			</div>
 		</div>

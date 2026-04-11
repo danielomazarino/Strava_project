@@ -10,18 +10,31 @@ function normalizeBaseUrl(baseUrl: string | undefined): string {
 	return baseUrl.replace(/\/$/, '');
 }
 
+export function getPublicApiBaseUrl(): string {
+	const configuredBaseUrl = normalizeBaseUrl(env.PUBLIC_API_BASE_URL);
+	if (configuredBaseUrl) {
+		if (!dev && /^https?:\/\//.test(configuredBaseUrl)) {
+			return '/api';
+		}
+
+		return configuredBaseUrl;
+	}
+
+	return dev ? '' : '/api';
+}
+
 export function resolveApiUrl(path: string): string {
 	if (/^https?:\/\//.test(path)) {
 		return path;
 	}
 
 	const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-	const baseUrl = normalizeBaseUrl(env.PUBLIC_API_BASE_URL);
+	const baseUrl = getPublicApiBaseUrl();
 	return baseUrl ? `${baseUrl}${normalizedPath}` : normalizedPath;
 }
 
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
-	const baseUrl = normalizeBaseUrl(env.PUBLIC_API_BASE_URL);
+	const baseUrl = getPublicApiBaseUrl();
 	if (!baseUrl) {
 		if (!dev) {
 			throw new Error('Frontend API base URL is not configured');

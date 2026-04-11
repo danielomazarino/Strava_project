@@ -2,10 +2,10 @@ import { redirect } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import { env } from '$env/dynamic/public';
 
-import { resolveApiUrl } from '$lib/api/client';
+import { getPublicApiBaseUrl, resolveApiUrl } from '$lib/api/client';
 
 export const load = ({ url }) => {
-	const apiBaseUrl = env.PUBLIC_API_BASE_URL?.trim() ?? '';
+	const apiBaseUrl = getPublicApiBaseUrl();
 	const loginUrl = resolveApiUrl('/auth/login');
 	const mockAuthEnabled = dev && env.PUBLIC_ENABLE_DEV_MOCK_AUTH === 'true';
 	const demoSessionAvailable = dev && !apiBaseUrl;

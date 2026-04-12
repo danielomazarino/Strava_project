@@ -9,7 +9,7 @@ from app.api.auth import get_user_repository
 from app.core.config import Settings, get_settings
 from app.db.repositories.activity_repo import ActivityRepository
 from app.db.repositories.user_repo import UserRepository
-from app.services.llm_service import LLMModelClient, LLMService, OllamaLLMModelClient, StubLLMModelClient
+from app.services.llm_service import GeminiLLMModelClient, LLMModelClient, LLMService, OllamaLLMModelClient, StubLLMModelClient
 
 router = APIRouter(prefix="/insights", tags=["insights"])
 
@@ -24,6 +24,11 @@ def get_llm_service(
         model_client = OllamaLLMModelClient(
             base_url=settings.ollama_base_url,
             model=settings.llm_model_path,
+        )
+    elif settings.gemini_api_key:
+        model_client = GeminiLLMModelClient(
+            api_key=settings.gemini_api_key,
+            model=settings.llm_model_path or "gemma-4-27b-it",
         )
     else:
         model_client = StubLLMModelClient()

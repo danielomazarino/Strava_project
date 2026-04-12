@@ -33,6 +33,27 @@ class OllamaLLMModelClient:
 
 
 @dataclass(frozen=True)
+class GeminiLLMModelClient:
+    api_key: str
+    model: str = "gemma-4-27b-it"
+
+    async def generate(self, prompt: str) -> str:
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{self.model}:generateContent?key={self.api_key}"
+        )
+        body = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"responseMimeType": "application/json"},
+        }
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(url, json=body)
+            response.raise_for_status()
+            data = response.json()
+            return data["candidates"][0]["content"]["parts"][0]["text"]
+
+
+@dataclass(frozen=True)
 class StubLLMModelClient:
     async def generate(self, prompt: str) -> str:
         if prompt.startswith("Summary Prompt"):

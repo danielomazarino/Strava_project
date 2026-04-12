@@ -14,6 +14,7 @@ class Settings:
     secret_key: str = ""
     llm_model_path: str = ""
     ollama_base_url: str = ""
+    gemini_api_key: str = ""
     cors_origins: str = ""
     log_level: str = "INFO"
     environment: str = "development"
@@ -91,6 +92,7 @@ def get_settings() -> Settings:
         secret_key=raw_secret_key or ("strava-training-diary-dev-secret" if not production_environment else ""),
         llm_model_path=os.getenv("LLM_MODEL_PATH", ""),
         ollama_base_url=os.getenv("OLLAMA_BASE_URL", ""),
+        gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
         cors_origins=os.getenv("CORS_ORIGINS", ""),
         log_level=os.getenv("LOG_LEVEL", "INFO"),
         environment=environment,

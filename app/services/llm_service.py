@@ -35,7 +35,7 @@ class OllamaLLMModelClient:
 @dataclass(frozen=True)
 class GeminiLLMModelClient:
     api_key: str
-    model: str = "gemma-4-27b-it"
+    model: str = "gemma-4-31b-it"
 
     async def generate(self, prompt: str) -> str:
         url = (

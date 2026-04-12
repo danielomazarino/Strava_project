@@ -28,7 +28,7 @@ def get_llm_service(
     elif settings.gemini_api_key:
         model_client = GeminiLLMModelClient(
             api_key=settings.gemini_api_key,
-            model=settings.llm_model_path or "gemma-4-27b-it",
+            model=settings.llm_model_path or "gemma-4-31b-it",
         )
     else:
         model_client = StubLLMModelClient()

@@ -14,6 +14,8 @@ from app.db.repositories.user_repo import UserRepository
 
 
 class StravaImportService:
+    ACTIVITY_DETAIL_BASE_URL = "https://www.strava.com/api/v3/activities"
+
     def __init__(
         self,
         *,
@@ -81,7 +83,73 @@ class StravaImportService:
 
         return total_imported
 
-    def _fetch_activity_page(
+    def enrich_descriptions(
+        self,
+        *,
+        strava_athlete_id: int,
+        limit: int = 50,
+    ) -> int:
+        """Fetch per-activity detail from Strava for activities that have no description yet.
+
+        Strava's list endpoint never returns the description field; this method
+        calls GET /activities/{id} for each activity with a NULL description and
+        stores the result.  An empty string is stored when Strava returns no text,
+        acting as a sentinel so the same activity is not re-fetched on the next call.
+
+        Returns the number of activities whose description was written.
+        """
+        user = self.user_repository.get_by_strava_athlete_id(strava_athlete_id)
+        if user is None:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        access_token = decrypt_secret(user.access_token_encrypted, self.settings.secret_key)
+        activities = self.activity_repository.list_activities_missing_descriptions(
+            user_id=user.id,
+            limit=limit,
+        )
+
+        enriched = 0
+        for activity in activities:
+            detail = self._fetch_activity_detail(
+                access_token=access_token,
+                activity_id=activity.strava_activity_id,
+            )
+            if detail is not None:
+                # Use empty string as sentinel for "fetched, no description in Strava"
+                activity.description = detail.get("description") or ""
+                self.activity_repository.session.flush()
+                enriched += 1
+
+        if enriched > 0:
+            self.activity_repository.session.commit()
+
+        return enriched
+
+    def _fetch_activity_detail(
+        self,
+        *,
+        access_token: str,
+        activity_id: int,
+    ) -> dict[str, Any] | None:
+        url = f"{self.ACTIVITY_DETAIL_BASE_URL}/{activity_id}"
+        while True:
+            response = self.http_client.get(
+                url,
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+            if response.status_code == 429:
+                self.sleep_fn(self._retry_after_seconds(response))
+                continue
+            if response.status_code == 404:
+                return None
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                raise self._to_http_exception(exc) from exc
+            break
+        return response.json()
+
+
         self,
         *,
         access_token: str,

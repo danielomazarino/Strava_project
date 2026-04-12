@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { DEMO_STRAVA_ATHLETE_ID, session } from '$lib/stores/session';
+	import { getSessionAthleteId, session } from '$lib/stores/session';
 	import { getActivityDetails } from '$lib/api/activity';
 	import type { ActivityDetail } from '$lib/api/models';
 	import RoutePreview from '$lib/components/RoutePreview.svelte';
@@ -51,7 +51,13 @@
 
 	onMount(async () => {
 		activityId = window.location.pathname.split('/').filter(Boolean).pop() ?? '';
-		const athleteId = $session?.stravaAthleteId ?? DEMO_STRAVA_ATHLETE_ID;
+		const athleteId = getSessionAthleteId($session);
+
+		if (!athleteId) {
+			loadError = 'Connect Strava to load activity details. Explicit demo sessions are no longer loaded automatically.';
+			loading = false;
+			return;
+		}
 
 		try {
 			const response = await getActivityDetails(athleteId, Number(activityId));
@@ -118,7 +124,7 @@
 					<span class="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1">{activity.location_country ?? 'Global'}</span>
 					<span class="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1">{activity.timezone ?? 'Timezone unknown'}</span>
 				</div>
-				<p class="mt-5 text-sm leading-7 text-[var(--color-text-muted)]">{activity.description ?? 'No notes were attached to this activity.'}</p>
+				<p class="mt-5 text-sm leading-7 text-[var(--color-text-muted)]">{activity.description || 'No notes were attached to this activity.'}</p>
 			</div>
 
 			<div class="section-block">

@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import { session, getSessionDisplayName } from '$lib/stores/session';
 	import NavLink from '$lib/ui/NavLink.svelte';
+	import NavIcon from '$lib/ui/NavIcon.svelte';
 
 	export let title = 'Strava Training Diary';
 
@@ -22,8 +24,7 @@
 	const aiNavItems: NavItem[] = [
 		{ href: '/dashboard', label: 'Dashboard', icon: 'dashboard', variant: 'primary' },
 		{ href: '/insights', label: 'Insights', icon: 'insights', variant: 'primary' },
-		{ href: '/semantic-search', label: 'Ask Gemma', icon: 'ask', variant: 'primary' },
-		{ href: '/compare', label: 'Compare', icon: 'compare', variant: 'primary' }
+		{ href: '/semantic-search', label: 'Ask Gemma', icon: 'ask', variant: 'primary' }
 	];
 
 	const trainingNavItems: NavItem[] = [
@@ -33,13 +34,13 @@
 
 	const mapNavItems: NavItem[] = [
 		{ href: '/heatmap', label: 'Heatmap', icon: 'heatmap', variant: 'secondary' },
-		{ href: '/routes', label: 'Routes', icon: 'routes', variant: 'secondary' }
+		{ href: '/routes', label: 'Routes', icon: 'routes', variant: 'secondary' },
+		{ href: '/compare', label: 'Compare', icon: 'compare', variant: 'secondary' }
 	];
 
 	const systemNavItems: NavItem[] = [
 		{ href: '/settings', label: 'Settings', icon: 'settings', variant: 'secondary' },
-		{ href: '/auth/login', label: 'Strava Connection', icon: 'auth', variant: 'secondary' },
-		{ href: '/about', label: 'About / Documentation', icon: 'about', variant: 'secondary' }
+		{ href: '/about', label: 'About', icon: 'about', variant: 'secondary' }
 	];
 
 	const navSections: NavSection[] = [
@@ -61,13 +62,13 @@
 		{ href: '/settings', label: 'Settings' },
 		{ href: '/auth/login', label: 'Strava Connection' },
 		{ href: '/auth/callback', label: 'Authentication' },
-		{ href: '/about', label: 'About / Documentation' }
+		{ href: '/about', label: 'About' }
 	];
 
 	let currentPathname = '/';
 	let mobileSidebarOpen = false;
 	let currentPageLabel = 'Dashboard';
-	let currentUserLabel = 'Anonymous';
+	let currentUserLabel = 'Not connected';
 	let previousPathname = currentPathname;
 
 	$: currentPathname = $page.url.pathname;
@@ -97,6 +98,11 @@
 
 	function toggleMobileSidebar() {
 		mobileSidebarOpen = !mobileSidebarOpen;
+	}
+
+	function handleSignOut() {
+		session.clearSession();
+		void goto('/');
 	}
 </script>
 
@@ -162,6 +168,20 @@
 								{#each section.items as item}
 									<NavLink href={item.href} label={item.label} icon={item.icon} variant={item.variant} active={$page.url.pathname === item.href || $page.url.pathname.startsWith(`${item.href}/`)} />
 								{/each}
+								{#if section.key === 'system'}
+									{#if $session}
+										<button
+											type="button"
+											class="nav-link nav-link--secondary w-full"
+											on:click={handleSignOut}
+										>
+											<span class="nav-link__icon" aria-hidden="true"><NavIcon name="auth" /></span>
+											<span class="nav-link__label">Sign out</span>
+										</button>
+									{:else}
+										<NavLink href="/auth/login" label="Connect Strava" icon="auth" variant="secondary" active={$page.url.pathname === '/auth/login'} />
+									{/if}
+								{/if}
 							</div>
 						</section>
 					{/each}

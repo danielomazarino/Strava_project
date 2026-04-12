@@ -75,7 +75,12 @@ class ActivityRepository:
             activity.moving_time = moving_time
             activity.elapsed_time = elapsed_time
             activity.elevation_gain = elevation_gain
-            activity.description = description
+            # Only overwrite description if we have a non-None value.
+            # The list endpoint never returns description; only the detail
+            # endpoint does, so a None here means "not available from list"
+            # rather than "the activity has no description".
+            if description is not None:
+                activity.description = description
             activity.polyline = polyline
             activity.timezone = timezone
             activity.location_country = location_country
@@ -87,6 +92,23 @@ class ActivityRepository:
 
     def list_by_user_id(self, *, user_id) -> list[Activity]:
         statement = select(Activity).where(Activity.user_id == user_id).order_by(Activity.start_date.desc())
+        return list(self.session.execute(statement).scalars().all())
+
+    def list_activities_missing_descriptions(self, *, user_id, limit: int = 50) -> list[Activity]:
+        """Return activities where description has never been fetched from Strava.
+
+        A NULL description means the detail endpoint has not been called yet.
+        An empty string means the endpoint was called and Strava returned no text.
+        """
+        statement = (
+            select(Activity)
+            .where(
+                Activity.user_id == user_id,
+                Activity.description.is_(None),
+            )
+            .order_by(Activity.start_date.desc())
+            .limit(limit)
+        )
         return list(self.session.execute(statement).scalars().all())
 
     def search_by_user_id(self, *, user_id, query: str) -> list[Activity]:

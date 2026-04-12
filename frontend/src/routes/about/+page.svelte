@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import PageShell from '$lib/ui/PageShell.svelte';
 	import { getAdminOverview, type AdminOverviewResponse } from '$lib/api/admin';
-	import { DEMO_STRAVA_ATHLETE_ID, session } from '$lib/stores/session';
+	import { getSessionDisplayName, session } from '$lib/stores/session';
 	import AdminRecordExplorer from '$lib/components/AdminRecordExplorer.svelte';
 
 	const docs = [
@@ -71,7 +71,7 @@
 			<div>
 				<p class="label-sharp">Admin surface</p>
 				<h2 class="section-title mt-2">Read-only data browser and product notes.</h2>
-				<p class="section-subtitle">This page explains login, demo fallback, and the local data browser without introducing an editable admin workflow.</p>
+				<p class="section-subtitle">This page explains login, explicit demo sessions, and the local data browser without introducing an editable admin workflow.</p>
 			</div>
 			<div class="flex flex-wrap gap-4 text-sm font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
 				<a class="transition-colors hover:text-[var(--color-text)]" href="/settings">Open settings</a>
@@ -153,32 +153,15 @@
 	<svelte:fragment slot="aside">
 		<div class="grid gap-6">
 			<section class="surface-panel">
-				<p class="label-sharp">Current browser session</p>
-				<div class="mt-4 grid gap-4">
-					<div>
-						<p class="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--color-text-muted)]">Mode</p>
-						<p class="mt-2 text-lg font-semibold tracking-tight text-[var(--color-text)]">{$session ? ($session.userId === 'demo-user' ? 'Demo' : 'Connected') : 'Anonymous'}</p>
-					</div>
-					<div>
-						<p class="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--color-text-muted)]">Athlete</p>
-						<p class="mt-2 text-lg font-semibold tracking-tight text-[var(--color-text)]">{$session ? $session.stravaAthleteId : DEMO_STRAVA_ATHLETE_ID}</p>
-					</div>
-					<div>
-						<p class="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--color-text-muted)]">Connected at</p>
-						<p class="mt-2 text-lg font-semibold tracking-tight text-[var(--color-text)]">{$session ? formatTime.format(new Date($session.connectedAt)) : 'n/a'}</p>
-					</div>
+				<p class="label-sharp">Reference docs</p>
+				<div class="mt-4 space-y-4">
+					{#each docs as doc}
+						<div>
+							<p class="label-sharp">{doc.title}</p>
+							<p class="mt-2 text-sm leading-6 text-[var(--color-text-muted)]">{doc.text}</p>
+						</div>
+					{/each}
 				</div>
-				<p class="mt-4 text-sm leading-6 text-[var(--color-text-muted)]">The browser stores the current session locally and uses it for read-only data requests.</p>
-			</section>
-
-			<section class="surface-panel">
-				<p class="label-sharp">Login and usage</p>
-				<ul class="bullet-list mt-4">
-					<li>You sign in by connecting your Strava account, not by creating a separate app password.</li>
-					<li>The backend exchanges the Strava code for encrypted access and refresh tokens.</li>
-					<li>The frontend can fall back to a local demo session when the API base URL is not configured.</li>
-					<li>The sidebar keeps system controls and reference content in one read-only place.</li>
-				</ul>
 			</section>
 		</div>
 	</svelte:fragment>

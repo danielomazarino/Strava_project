@@ -61,6 +61,25 @@ def import_activities(
     return {"status": "ok", "imported": imported_count}
 
 
+@router.post("/enrich-descriptions")
+def enrich_activity_descriptions(
+    strava_athlete_id: int,
+    limit: int = 50,
+    import_service: StravaImportService = Depends(get_strava_import_service),
+) -> dict[str, int | str]:
+    """Fetch per-activity detail from Strava to populate missing descriptions.
+
+    Call this endpoint repeatedly (e.g. limit=50 per call) until all activities
+    have been enriched.  Each call makes up to `limit` requests to the Strava
+    activity detail API.
+    """
+    enriched_count = import_service.enrich_descriptions(
+        strava_athlete_id=strava_athlete_id,
+        limit=limit,
+    )
+    return {"status": "ok", "enriched": enriched_count}
+
+
 @router.get("/{strava_activity_id}")
 def get_activity(
     strava_activity_id: int,

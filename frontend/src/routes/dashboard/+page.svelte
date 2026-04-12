@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import PageShell from '$lib/ui/PageShell.svelte';
-	import { session } from '$lib/stores/session';
+	import { getSessionAthleteId, session } from '$lib/stores/session';
 	import { listDiaryEntries } from '$lib/api/diary';
 	import type { DiaryEntry } from '$lib/api/models';
 
@@ -43,13 +43,16 @@
 	}
 
 	onMount(async () => {
-		if ($session) {
+		const athleteId = getSessionAthleteId($session);
+		if (athleteId) {
 			try {
-				const response = await listDiaryEntries($session.stravaAthleteId);
+				const response = await listDiaryEntries(athleteId);
 				entries = response.entries;
 			} catch (caught) {
 				error = caught instanceof Error ? caught.message : 'Unable to load dashboard';
 			}
+		} else {
+			error = 'Connect Strava to load the dashboard. Explicit demo sessions are no longer loaded automatically.';
 		}
 		loading = false;
 	});
@@ -128,29 +131,13 @@
 							<dd class="mt-2 text-3xl font-semibold tracking-tight text-[var(--color-text)]">{formatter.format(monthlySummary.elevation)} m</dd>
 						</div>
 					</dl>
-					<div class="mt-4 grid gap-3 text-sm leading-6 text-[var(--color-text-muted)]">
-						<p>Fatigue trend: recent training load and recovery.</p>
-						<p>Pace consistency: whether recent sessions cluster tightly or drift.</p>
-						<p>Route mix: terrain variety for the last month.</p>
-					</div>
 				</section>
 			</div>
 		{/if}
 	</section>
 
-	<section class="mt-6 grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-		<section class="surface-panel">
-			<p class="label-sharp">Quick actions</p>
-			<div class="mt-4 flex flex-wrap gap-2">
-				<a class="action-button action-button--secondary" href="/diary">Open diary</a>
-				<a class="action-button action-button--secondary" href="/semantic-search">Ask Gemma</a>
-				<a class="action-button action-button--secondary" href="/heatmap">View heatmap</a>
-				<a class="action-button action-button--secondary" href="/compare">Compare sessions</a>
-			</div>
-		</section>
-
-		<section class="surface-panel">
-			<p class="label-sharp">Recent activities</p>
+	<section class="mt-6 surface-panel">
+		<p class="label-sharp">Recent activities</p>
 			<div class="mt-4 space-y-3">
 				{#if loading}
 					<div class="space-y-3">
@@ -174,6 +161,5 @@
 					{/each}
 				{/if}
 			</div>
-		</section>
 	</section>
 </PageShell>

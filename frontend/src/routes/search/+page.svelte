@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { DEMO_STRAVA_ATHLETE_ID, session } from '$lib/stores/session';
+	import { getSessionAthleteId, session } from '$lib/stores/session';
 	import { keywordSearch, semanticSearch } from '$lib/api/search';
 	import type { SearchResult } from '$lib/api/models';
 
@@ -16,10 +16,16 @@
 			return;
 		}
 
+		const athleteId = getSessionAthleteId($session);
+		if (!athleteId) {
+			error = 'Connect Strava to search the archive. Explicit demo sessions are no longer loaded automatically.';
+			results = [];
+			return;
+		}
+
 		loading = true;
 		error = '';
 		try {
-			const athleteId = $session?.stravaAthleteId ?? DEMO_STRAVA_ATHLETE_ID;
 			results = mode === 'keyword'
 				? (await keywordSearch(athleteId, query)).results
 				: (await semanticSearch(athleteId, query)).results;
@@ -31,6 +37,10 @@
 	}
 
 	onMount(() => {
+		if (!getSessionAthleteId($session)) {
+			error = 'Connect Strava to search the archive. Explicit demo sessions are no longer loaded automatically.';
+			return;
+		}
 		query = 'run';
 		void runSearch();
 	});
@@ -47,7 +57,6 @@
 			<h1 class="section-title mt-2">Search the activity archive.</h1>
 			<p class="section-subtitle">Run keyword or semantic lookup against the same compact workspace.</p>
 		</div>
-		<a class="action-button action-button--secondary w-fit" href="/filters">Open smart filters</a>
 	</div>
 
 	<div class="mt-6 grid gap-3 md:grid-cols-[minmax(0,1fr)_180px]">
@@ -90,13 +99,4 @@
 			{/each}
 		</div>
 	{/if}
-
-	<div class="mt-6 section-block">
-		<p class="label-sharp">Search notes</p>
-		<ul class="bullet-list mt-4">
-			<li>Keyword search stays close to the stored text fields.</li>
-			<li>Semantic search uses the same archive but changes the ranking path.</li>
-			<li>Every result links straight into the activity detail page.</li>
-		</ul>
-	</div>
 </section>

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import PageShell from '$lib/ui/PageShell.svelte';
-	import { DEMO_STRAVA_ATHLETE_ID, session } from '$lib/stores/session';
+	import { getSessionAthleteId, session } from '$lib/stores/session';
 	import { listDiaryEntries } from '$lib/api/diary';
 	import type { DiaryEntry } from '$lib/api/models';
 
@@ -27,7 +27,12 @@
 	const loadDiary = async () => {
 		loading = true;
 		loadError = '';
-		const athleteId = $session?.stravaAthleteId ?? DEMO_STRAVA_ATHLETE_ID;
+		const athleteId = getSessionAthleteId($session);
+		if (!athleteId) {
+			loadError = 'Connect Strava to load diary entries. Explicit demo sessions are no longer loaded automatically.';
+			loading = false;
+			return;
+		}
 
 		try {
 			const response = await listDiaryEntries(athleteId);

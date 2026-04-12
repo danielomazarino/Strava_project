@@ -149,7 +149,7 @@ class StravaImportService:
             break
         return response.json()
 
-
+    def _fetch_activity_list(
         self,
         *,
         access_token: str,

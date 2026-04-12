@@ -20,6 +20,15 @@ class FakeOAuthService:
         return SimpleNamespace(id=uuid4(), strava_athlete_id=123456)
 
 
+class RecordingOAuthService:
+    def __init__(self):
+        self.redirect_uris: list[str] = []
+
+    def complete_callback(self, *, code: str, state: str, redirect_uri: str):
+        self.redirect_uris.append(redirect_uri)
+        return SimpleNamespace(id=uuid4(), strava_athlete_id=123456)
+
+
 class FakeActivityRepository:
     def __init__(self, latest_start_date: datetime | None):
         self.latest_start_date = latest_start_date
@@ -59,6 +68,24 @@ def test_login_redirects_to_strava_authorize_url(monkeypatch):
     assert response.headers["location"].startswith("https://www.strava.com/oauth/authorize?")
     assert "client_id=client-123" in response.headers["location"]
     assert "response_type=code" in response.headers["location"]
+
+
+def test_login_uses_https_redirect_uri_in_production(monkeypatch):
+    get_settings.cache_clear()
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("STRAVA_CLIENT_ID", "client-123")
+    monkeypatch.setenv("STRAVA_CLIENT_SECRET", "secret-456")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://example")
+    monkeypatch.setenv("SECRET_KEY", "unit-test-secret")
+    monkeypatch.setenv("LLM_MODEL_PATH", "/models/gemma")
+    monkeypatch.setenv("CORS_ORIGINS", "https://example.com")
+
+    client = TestClient(app)
+
+    response = client.get("/auth/login", follow_redirects=False)
+
+    assert response.status_code == 302
+    assert "redirect_uri=https%3A%2F%2Ftestserver%2Fauth%2Fcallback" in response.headers["location"]
 
 
 def test_login_falls_back_to_mock_auth_without_client_id(monkeypatch):
@@ -135,6 +162,34 @@ def test_callback_returns_connected_payload():
     assert import_service.calls == [
         {"strava_athlete_id": 123456, "after": int(datetime(2026, 4, 4, 8, 0, tzinfo=timezone.utc).timestamp()), "before": None}
     ]
+
+
+def test_callback_uses_https_redirect_uri_in_production(monkeypatch):
+    get_settings.cache_clear()
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("STRAVA_CLIENT_ID", "client-123")
+    monkeypatch.setenv("STRAVA_CLIENT_SECRET", "secret-456")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://example")
+    monkeypatch.setenv("SECRET_KEY", "unit-test-secret")
+    monkeypatch.setenv("LLM_MODEL_PATH", "/models/gemma")
+    monkeypatch.setenv("CORS_ORIGINS", "https://example.com")
+
+    oauth_service = RecordingOAuthService()
+    activity_repository = FakeActivityRepository(None)
+    import_service = FakeImportService()
+    app.dependency_overrides[get_oauth_service] = lambda: oauth_service
+    app.dependency_overrides[get_activity_repository] = lambda: activity_repository
+    app.dependency_overrides[get_strava_import_service] = lambda: import_service
+
+    client = TestClient(app)
+    state = create_oauth_state("unit-test-secret")
+
+    response = client.get(f"/auth/callback?code=oauth-code&state={state}")
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert oauth_service.redirect_uris == ["https://testserver/auth/callback"]
 
 
 def test_callback_redirects_browser_navigation_to_frontend():

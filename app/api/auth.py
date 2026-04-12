@@ -79,6 +79,18 @@ def _build_dev_callback_url(request: Request, settings: Settings) -> str:
     return "http://127.0.0.1:5173/auth/callback"
 
 
+def _build_oauth_callback_url(request: Request, settings: Settings) -> str:
+    callback_url = str(request.url_for("auth_callback"))
+    if not is_production_environment(settings):
+        return callback_url
+
+    parsed = urlparse(callback_url)
+    if parsed.scheme == "https":
+        return callback_url
+
+    return parsed._replace(scheme="https").geturl()
+
+
 @router.get("/login", name="auth_login")
 def login(request: Request, settings: Settings = Depends(get_settings)) -> RedirectResponse:
     state = create_oauth_state(settings.secret_key, return_to=_build_dev_callback_url(request, settings))
@@ -90,7 +102,7 @@ def login(request: Request, settings: Settings = Depends(get_settings)) -> Redir
 
         raise HTTPException(status_code=500, detail="STRAVA_CLIENT_ID is not configured")
 
-    redirect_uri = str(request.url_for("auth_callback"))
+    redirect_uri = _build_oauth_callback_url(request, settings)
     authorize_url = build_authorize_url(
         client_id=settings.strava_client_id,
         redirect_uri=redirect_uri,
@@ -133,7 +145,7 @@ def callback(
     user = oauth_service.complete_callback(
         code=code,
         state=state,
-        redirect_uri=str(request.url_for("auth_callback")),
+        redirect_uri=_build_oauth_callback_url(request, settings),
     )
 
     latest_start_date = activity_repository.get_latest_start_date_for_user(user_id=user.id)

@@ -290,7 +290,22 @@ class LLMService:
 
     @staticmethod
     def _parse_response(response: str) -> dict[str, Any]:
-        payload = json.loads(response)
+        try:
+            payload = json.loads(response)
+        except json.JSONDecodeError:
+            decoder = json.JSONDecoder()
+            payload = None
+            for index, char in enumerate(response):
+                if char != "{":
+                    continue
+                try:
+                    candidate, _ = decoder.raw_decode(response[index:])
+                    payload = candidate
+                    break
+                except json.JSONDecodeError:
+                    continue
+            if payload is None:
+                raise ValueError("LLM response is not valid JSON")
         if not isinstance(payload, dict):
             raise ValueError("LLM response must be a JSON object")
         return payload

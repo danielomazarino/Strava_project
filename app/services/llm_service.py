@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Protocol
 
+import httpx
+
 from app.core.config import Settings
 from app.db.repositories.activity_repo import ActivityRepository
 from app.db.repositories.user_repo import UserRepository
@@ -13,6 +15,21 @@ from app.schemas.insights import PatternInsight, RegionComparisonInsight, Summar
 
 class LLMModelClient(Protocol):
     async def generate(self, prompt: str) -> str: ...
+
+
+@dataclass(frozen=True)
+class OllamaLLMModelClient:
+    base_url: str
+    model: str
+
+    async def generate(self, prompt: str) -> str:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(
+                f"{self.base_url.rstrip('/')}/api/generate",
+                json={"model": self.model, "prompt": prompt, "stream": False, "format": "json"},
+            )
+            response.raise_for_status()
+            return response.json()["response"]
 
 
 @dataclass(frozen=True)
@@ -139,33 +156,41 @@ class LLMService:
         end_date: datetime,
         activities: list[Any],
     ) -> str:
+        schema = (
+            '{"summary": "2-3 sentence narrative of the training period", '
+            '"volume": "low|moderate|high", '
+            '"intensity": "low|moderate|high", '
+            '"notable_events": ["event description"], '
+            '"subjective_notes": ["note from athlete description"], '
+            '"performance_patterns": ["observed pattern"]}'
+        )
         lines = [
             "Summary Prompt",
-            f"Summarize the user's training between {start_date.isoformat()} and {end_date.isoformat()}.",
-            "Focus on:",
-            "volume",
-            "intensity",
-            "notable events",
-            "subjective notes",
-            "patterns in performance",
-            "Do not invent data.",
-            "Activities:",
+            f"Analyze training activities between {start_date.date()} and {end_date.date()}.",
+            "Return ONLY a JSON object matching this schema exactly:",
+            schema,
+            "Base your answer only on the activities listed. Do not invent data.",
+            "Activities (date | name | type | description | country):",
         ]
         lines.extend(self._format_activity_lines(activities))
         return "\n".join(lines)
 
     def build_pattern_prompt(self, activities: list[Any]) -> str:
+        schema = (
+            '{"patterns": ["recurring pattern"], '
+            '"fatigue": ["fatigue signal observed"], '
+            '"motivation": ["motivation signal observed"], '
+            '"terrain_effects": ["terrain effect on performance"], '
+            '"weather_effects": ["weather effect on performance"], '
+            '"pacing_issues": ["pacing issue observed"]}'
+        )
         lines = [
             "Pattern Detection Prompt",
-            "Analyze the following training notes and identify recurring patterns.",
-            "Focus on:",
-            "fatigue",
-            "motivation",
-            "terrain effects",
-            "weather effects",
-            "pacing issues",
-            "Do not add new interpretations.",
-            "Notes:",
+            "Analyze the training notes below and identify recurring patterns.",
+            "Return ONLY a JSON object matching this schema exactly:",
+            schema,
+            "Use only the data provided. Do not invent data.",
+            "Notes (date | description | country):",
         ]
         lines.extend(self._format_note_lines(activities))
         return "\n".join(lines)
@@ -180,25 +205,30 @@ class LLMService:
         start_date: datetime | None = None,
         end_date: datetime | None = None,
     ) -> str:
+        schema = (
+            '{"region_a": "region name", '
+            '"region_b": "region name", '
+            '"perceived_effort": "easier|similar|harder", '
+            '"terrain_differences": ["observed difference"], '
+            '"pacing_differences": ["observed difference"], '
+            '"subjective_notes": ["observation from athlete notes"]}'
+        )
         lines = [
             "Region Comparison Prompt",
-            f"Compare the user's training experiences between {region_a} and {region_b}.",
+            f"Compare training in {region_a} vs {region_b}.",
+            "Return ONLY a JSON object matching this schema exactly:",
+            schema,
         ]
         if start_date is not None and end_date is not None:
-            lines.append(f"Time window: {start_date.isoformat()} to {end_date.isoformat()}.")
+            lines.append(f"Time window: {start_date.date()} to {end_date.date()}.")
         lines.extend(
             [
-                "Focus on:",
-                "perceived effort",
-                "terrain differences",
-                "pacing differences",
-                "subjective notes",
-                "Do not invent data.",
-                f"Region {region_a} activities:",
+                "Use only the data provided. Do not invent data.",
+                f"Activities in {region_a} (date | name | type | description | country):",
             ]
         )
         lines.extend(self._format_activity_lines(activities_a))
-        lines.append(f"Region {region_b} activities:")
+        lines.append(f"Activities in {region_b} (date | name | type | description | country):")
         lines.extend(self._format_activity_lines(activities_b))
         return "\n".join(lines)
 

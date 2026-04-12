@@ -13,6 +13,7 @@ class Settings:
     database_url: str = ""
     secret_key: str = ""
     llm_model_path: str = ""
+    ollama_base_url: str = ""
     cors_origins: str = ""
     log_level: str = "INFO"
     environment: str = "development"
@@ -89,6 +90,7 @@ def get_settings() -> Settings:
         database_url=database_url,
         secret_key=raw_secret_key or ("strava-training-diary-dev-secret" if not production_environment else ""),
         llm_model_path=os.getenv("LLM_MODEL_PATH", ""),
+        ollama_base_url=os.getenv("OLLAMA_BASE_URL", ""),
         cors_origins=os.getenv("CORS_ORIGINS", ""),
         log_level=os.getenv("LOG_LEVEL", "INFO"),
         environment=environment,

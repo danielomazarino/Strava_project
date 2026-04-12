@@ -9,7 +9,7 @@ from app.api.auth import get_user_repository
 from app.core.config import Settings, get_settings
 from app.db.repositories.activity_repo import ActivityRepository
 from app.db.repositories.user_repo import UserRepository
-from app.services.llm_service import LLMService, StubLLMModelClient
+from app.services.llm_service import LLMModelClient, LLMService, OllamaLLMModelClient, StubLLMModelClient
 
 router = APIRouter(prefix="/insights", tags=["insights"])
 
@@ -19,11 +19,19 @@ def get_llm_service(
     user_repository: UserRepository = Depends(get_user_repository),
     activity_repository: ActivityRepository = Depends(get_activity_repository_from_activities),
 ) -> LLMService:
+    model_client: LLMModelClient
+    if settings.ollama_base_url and settings.llm_model_path:
+        model_client = OllamaLLMModelClient(
+            base_url=settings.ollama_base_url,
+            model=settings.llm_model_path,
+        )
+    else:
+        model_client = StubLLMModelClient()
     return LLMService(
         settings=settings,
         user_repository=user_repository,
         activity_repository=activity_repository,
-        model_client=StubLLMModelClient(),
+        model_client=model_client,
     )
 
 

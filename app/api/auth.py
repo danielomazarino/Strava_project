@@ -12,9 +12,11 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_cors_origins, get_settings, is_production_environment
 from app.core.security import create_oauth_state, unpack_oauth_state
 from app.db.bootstrap import DEV_DEMO_STRAVA_ATHLETE_ID
+from app.db.repositories.activity_repo import ActivityRepository
 from app.db.repositories.user_repo import UserRepository
 from app.db.session import get_db
 from app.services.oauth_service import OAuthService, build_authorize_url
+from app.services.strava_import_service import StravaImportService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -31,6 +33,10 @@ def get_user_repository(db: Session = Depends(get_db)) -> UserRepository:
     return UserRepository(db)
 
 
+def get_activity_repository(db: Session = Depends(get_db)) -> ActivityRepository:
+    return ActivityRepository(db)
+
+
 def get_oauth_service(
     settings: Settings = Depends(get_settings),
     user_repository: UserRepository = Depends(get_user_repository),
@@ -39,6 +45,20 @@ def get_oauth_service(
     return OAuthService(
         settings=settings,
         user_repository=user_repository,
+        http_client=http_client,
+    )
+
+
+def get_strava_import_service(
+    settings: Settings = Depends(get_settings),
+    user_repository: UserRepository = Depends(get_user_repository),
+    activity_repository: ActivityRepository = Depends(get_activity_repository),
+    http_client: httpx.Client = Depends(get_http_client),
+) -> StravaImportService:
+    return StravaImportService(
+        settings=settings,
+        user_repository=user_repository,
+        activity_repository=activity_repository,
         http_client=http_client,
     )
 
@@ -104,6 +124,8 @@ def callback(
     state: str | None = None,
     settings: Settings = Depends(get_settings),
     oauth_service: OAuthService = Depends(get_oauth_service),
+    activity_repository: ActivityRepository = Depends(get_activity_repository),
+    import_service: StravaImportService = Depends(get_strava_import_service),
 ) -> dict[str, object]:
     if not code or not state:
         raise HTTPException(status_code=400, detail="Missing OAuth callback parameters")
@@ -112,6 +134,12 @@ def callback(
         code=code,
         state=state,
         redirect_uri=str(request.url_for("auth_callback")),
+    )
+
+    latest_start_date = activity_repository.get_latest_start_date_for_user(user_id=user.id)
+    imported_count = import_service.import_activities(
+        strava_athlete_id=user.strava_athlete_id,
+        after=int(latest_start_date.timestamp()) if latest_start_date is not None else None,
     )
 
     return_to = unpack_oauth_state(state, settings.secret_key)
@@ -128,4 +156,5 @@ def callback(
         "status": "connected",
         "user_id": str(user.id),
         "strava_athlete_id": user.strava_athlete_id,
+        "imported_count": imported_count,
     }

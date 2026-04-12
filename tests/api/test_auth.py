@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -7,7 +8,7 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from app.api.auth import get_oauth_service, mock_login
+from app.api.auth import get_activity_repository, get_oauth_service, get_strava_import_service, mock_login
 from app.core.config import Settings, get_settings
 from app.core.security import create_oauth_state
 from app.db.bootstrap import DEV_DEMO_STRAVA_ATHLETE_ID
@@ -17,6 +18,31 @@ from app.main import app
 class FakeOAuthService:
     def complete_callback(self, *, code: str, state: str, redirect_uri: str):
         return SimpleNamespace(id=uuid4(), strava_athlete_id=123456)
+
+
+class FakeActivityRepository:
+    def __init__(self, latest_start_date: datetime | None):
+        self.latest_start_date = latest_start_date
+        self.calls: list[object] = []
+
+    def get_latest_start_date_for_user(self, *, user_id):
+        self.calls.append(user_id)
+        return self.latest_start_date
+
+
+class FakeImportService:
+    def __init__(self):
+        self.calls: list[dict] = []
+
+    def import_activities(self, *, strava_athlete_id: int, after=None, before=None):
+        self.calls.append({"strava_athlete_id": strava_athlete_id, "after": after, "before": before})
+        return 17
+
+
+def _override_callback_dependencies(activity_repository: FakeActivityRepository | None = None, import_service: FakeImportService | None = None):
+    app.dependency_overrides[get_oauth_service] = lambda: FakeOAuthService()
+    app.dependency_overrides[get_activity_repository] = lambda: activity_repository or FakeActivityRepository(None)
+    app.dependency_overrides[get_strava_import_service] = lambda: import_service or FakeImportService()
 
 
 def test_login_redirects_to_strava_authorize_url(monkeypatch):
@@ -93,7 +119,9 @@ def test_mock_login_is_disabled_in_production():
 
 
 def test_callback_returns_connected_payload():
-    app.dependency_overrides[get_oauth_service] = lambda: FakeOAuthService()
+    activity_repository = FakeActivityRepository(datetime(2026, 4, 4, 8, 0, tzinfo=timezone.utc))
+    import_service = FakeImportService()
+    _override_callback_dependencies(activity_repository, import_service)
     client = TestClient(app)
     state = create_oauth_state("unit-test-secret")
 
@@ -104,10 +132,13 @@ def test_callback_returns_connected_payload():
     assert response.status_code == 200
     assert response.json()["status"] == "connected"
     assert response.json()["strava_athlete_id"] == 123456
+    assert import_service.calls == [
+        {"strava_athlete_id": 123456, "after": int(datetime(2026, 4, 4, 8, 0, tzinfo=timezone.utc).timestamp()), "before": None}
+    ]
 
 
 def test_callback_redirects_browser_navigation_to_frontend():
-    app.dependency_overrides[get_oauth_service] = lambda: FakeOAuthService()
+    _override_callback_dependencies(FakeActivityRepository(None), FakeImportService())
     client = TestClient(app)
     state = create_oauth_state("unit-test-secret", return_to="http://127.0.0.1:5173/auth/callback")
 
@@ -126,7 +157,7 @@ def test_callback_redirects_browser_navigation_to_frontend():
 
 
 def test_callback_rejects_missing_parameters():
-    app.dependency_overrides[get_oauth_service] = lambda: FakeOAuthService()
+    _override_callback_dependencies(FakeActivityRepository(None), FakeImportService())
     client = TestClient(app)
 
     response = client.get("/auth/callback")

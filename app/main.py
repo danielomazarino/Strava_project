@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from threading import Event, Thread
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,6 +16,7 @@ from app.core.config import get_cors_origins, get_settings, is_production_enviro
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.db.bootstrap import initialize_database, seed_development_database
+from app.workers.background_sync import start_background_sync
 
 settings = get_settings()
 configure_logging(settings.log_level)
@@ -25,7 +27,19 @@ async def lifespan(_: FastAPI):
 	initialize_database(settings.database_url)
 	if not is_production_environment(settings):
 		seed_development_database(settings.database_url, secret_key=settings.secret_key)
-	yield
+
+	background_sync_thread: Thread | None = None
+	background_sync_stop_event: Event | None = None
+	if is_production_environment(settings):
+		background_sync_thread, background_sync_stop_event = start_background_sync(settings=settings)
+
+	try:
+		yield
+	finally:
+		if background_sync_stop_event is not None:
+			background_sync_stop_event.set()
+		if background_sync_thread is not None:
+			background_sync_thread.join(timeout=5)
 
 
 app = FastAPI(title="Strava Training Diary", lifespan=lifespan)
